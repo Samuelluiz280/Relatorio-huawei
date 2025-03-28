@@ -3,7 +3,6 @@
 // @namespace    http://tampermonkey.net/
 // @version      1.1
 // @description  try to take over the world!
-// @author       Wesley GG
 // @match        https://*/html/index.html
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=gegnet.com.br
 // @license      MIT
