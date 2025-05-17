@@ -1,126 +1,128 @@
 // ==UserScript==
-// @name         Huawei Router Info Collector
+// @name         Huawei AX2 Info Collector
 // @namespace    http://tampermonkey.net/
-// @version      1.1
-// @description  Coleta informações úteis de roteadores Huawei (modelo, uptime, dispositivos conectados, etc.)
-// @author       Samuka
-// @match         *://*/html/index.html
+// @version      1.0
+// @description  Coleta informações específicas do Huawei WiFi AX2
+// @author       Você
+// @match        http://*/html/index.html
 // @grant        none
 // ==/UserScript==
 
-(async function () {
-    'use strict';
+(async function() {
+  'use strict';
 
-    const ip = window.location.hostname;
-    const baseURL = `http://${ip}/api/`;
-    const headers = {
-        'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
-    };
+  const ip = window.location.hostname;
+  const baseURL = `http://${ip}/api/`;
+  const headers = {
+    'Accept': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest'
+  };
 
-    const fetchJson = async (endpoint) => {
-        try {
-            const response = await fetch(baseURL + endpoint, { headers });
-            if (!response.ok) throw new Error(`Erro ao buscar ${endpoint}`);
-            return await response.json();
-        } catch (err) {
-            console.warn(`Falha em ${endpoint}:`, err);
-            return null;
-        }
-    };
+  async function fetchJson(endpoint) {
+    try {
+      const res = await fetch(baseURL + endpoint, { headers });
+      if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
+      return await res.json();
+    } catch(e) {
+      console.warn(`Erro fetch ${endpoint}:`, e.message);
+      return null;
+    }
+  }
 
-    const formatUptime = (secs) => {
-        secs = Number(secs);
-        if (isNaN(secs)) return 'Desconhecido';
-        const d = Math.floor(secs / 86400);
-        const h = Math.floor((secs % 86400) / 3600);
-        const m = Math.floor((secs % 3600) / 60);
-        const s = secs % 60;
-        let str = '';
-        if (d) str += `${d} dias `;
-        if (h) str += `${h} horas `;
-        if (m) str += `${m} minutos `;
-        if (s || (!d && !h && !m)) str += `${s} segundos`;
-        return str.trim();
-    };
+  // Coletar dados de cada endpoint
+  const deviceInfo = await fetchJson('system/deviceinfo');
+  const wanDsl = await fetchJson('ntwk/wan_dsl');
+  const lanDhcp = await fetchJson('ntwk/lan_dhcp');
+  const lanUpnp = await fetchJson('ntwk/lan_upnp');
+  const ipv6 = await fetchJson('ntwk/ipv6');
+  const wifiBasic = await fetchJson('ntwk/wifi_basic');
+  const wifiAdvanced = await fetchJson('ntwk/wifi_advanced');
 
-    const deviceInfo = await fetchJson('system/deviceinfo');
-    const uptime = deviceInfo?.UpTime ? formatUptime(deviceInfo.UpTime) : 'Desconhecido';
-    const modelo = deviceInfo?.FriendlyName || 'Modelo desconhecido';
+  // Extrair dados com fallback para 'Desconhecido'
+  const modelo = deviceInfo?.FriendlyName || deviceInfo?.ModelName || 'Desconhecido';
+  const firmware = deviceInfo?.SoftwareVersion || 'Desconhecido';
 
-    const upnpData = await fetchJson('ntwk/lan_upnp');
-    const upnp = upnpData?.enable === true ? 'Ativado' : 'Desativado';
+  const dnsWAN = wanDsl ? `${wanDsl.dns1 || '-'} / ${wanDsl.dns2 || '-'}` : 'Desconhecido';
+  const dnsLAN = lanDhcp ? `${lanDhcp.dns1 || '-'} / ${lanDhcp.dns2 || '-'}` : 'Desconhecido';
 
-    const dnsData = await fetchJson('ntwk/wan_dsl');
-    const dns = dnsData ? `${dnsData.dns1 || '-'} / ${dnsData.dns2 || '-'}` : 'Indisponível';
+  const priorizar5G = (wifiAdvanced?.EnableSmartConnect === true) ? 'Habilitado' : 'Desabilitado';
 
-    const hostData = await fetchJson('system/HostInfo');
-    const hosts = Array.isArray(hostData) ? hostData : (hostData ? [hostData] : []);
-    const ativos = hosts.filter(d => d.Active);
-    const wifi2g = ativos.filter(d => d.Frequency === '2.4GHz');
-    const wifi5g = ativos.filter(d => d.Frequency === '5GHz');
-    const cabo = ativos.filter(d => d.Layer2Interface?.includes('LAN'));
+  const upnpStatus = lanUpnp?.enable === true ? 'Habilitado' : 'Desabilitado';
 
-    const dispositivos = {
-        total: ativos.length,
-        wifi2g: wifi2g.length,
-        wifi5g: wifi5g.length,
-        cabo: cabo.length
-    };
+  const ipv6Status = ipv6?.EnableIPv6 ? 'Habilitado' : 'Desabilitado';
 
-    const output = `
-📡 Modelo: ${modelo}
-⏱️ Uptime: ${uptime}
-🌐 DNS: ${dns}
-🔁 UPnP: ${upnp}
+  // Rede 2.4G - largura e canal
+  const wifi24 = wifiBasic?.WifiBasic?.find(w => w.Name?.includes('2.4G')) || wifiBasic?.WifiBasic || {};
+  const largura24 = wifi24?.Bandwidth || 'Desconhecido';
+  const canal24 = wifi24?.Channel || 'Desconhecido';
 
-📶 Dispositivos Conectados:
-- Total: ${dispositivos.total}
-- Wi-Fi 2.4GHz: ${dispositivos.wifi2g}
-- Wi-Fi 5GHz: ${dispositivos.wifi5g}
-- Cabo (LAN): ${dispositivos.cabo}
-    `.trim();
+  // Rede 5G - largura e canal
+  const wifi5 = wifiBasic?.WifiBasic?.find(w => w.Name?.includes('5G')) || wifiBasic?.WifiBasic || {};
+  const largura5 = wifi5?.Bandwidth || 'Desconhecido';
+  const canal5 = wifi5?.Channel || 'Desconhecido';
 
-    // Cria container fixo para textarea + botão
-    const container = document.createElement('div');
-    container.style.position = 'fixed';
-    container.style.top = '20px';
-    container.style.right = '20px';
-    container.style.width = '320px';
-    container.style.background = '#f9f9f9';
-    container.style.border = '2px solid #555';
-    container.style.borderRadius = '8px';
-    container.style.padding = '10px';
-    container.style.zIndex = 9999;
-    container.style.fontFamily = 'monospace';
-    container.style.fontSize = '13px';
-    container.style.color = '#222';
-    container.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+  // Uptime - do deviceInfo (em segundos) para string legível
+  const uptimeSeg = parseInt(deviceInfo?.UpTime || 0);
+  let uptimeStr = 'Desconhecido';
+  if (uptimeSeg > 0) {
+    const dias = Math.floor(uptimeSeg / 86400);
+    const horas = Math.floor((uptimeSeg % 86400) / 3600);
+    const minutos = Math.floor((uptimeSeg % 3600) / 60);
+    uptimeStr = `${dias} dia${dias !== 1 ? 's' : ''} ${horas} hora${horas !== 1 ? 's' : ''} ${minutos} minuto${minutos !== 1 ? 's' : ''}`;
+  }
 
-    // Textarea para saída
-    const textArea = document.createElement('textarea');
-    textArea.value = output;
-    textArea.style.width = '100%';
-    textArea.style.height = '180px';
-    textArea.style.resize = 'none';
-    textArea.readOnly = true;
+  // Montar output formatado
+  const output = `
+[Configurações do Roteador]
+Modelo: ${modelo}
+Firmware: ${firmware}
+DNS WAN: ${dnsWAN}
+DNS LAN: ${dnsLAN}
+Priorizar 5G: ${priorizar5G}
+UPNP: ${upnpStatus}
+IPv6 Habilitado: ${ipv6Status}
+Rede 2.4G - Largura: ${largura24} | Canal: ${canal24}
+Rede 5G - Largura: ${largura5} | Canal: ${canal5}
+Uptime: ${uptimeStr}
+  `.trim();
 
-    // Botão copiar texto
-    const copyBtn = document.createElement('button');
-    copyBtn.textContent = 'Copiar texto';
-    copyBtn.style.marginTop = '8px';
-    copyBtn.style.padding = '5px 10px';
-    copyBtn.style.cursor = 'pointer';
+  // Criar textarea copiável e botão copiar
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.top = '20px';
+  container.style.right = '20px';
+  container.style.width = '360px';
+  container.style.padding = '10px';
+  container.style.background = '#f9f9f9';
+  container.style.border = '2px solid #444';
+  container.style.borderRadius = '8px';
+  container.style.zIndex = 9999;
+  container.style.fontFamily = 'monospace';
+  container.style.fontSize = '13px';
+  container.style.boxShadow = '0 0 10px rgba(0,0,0,0.2)';
 
-    copyBtn.addEventListener('click', () => {
-        textArea.select();
-        document.execCommand('copy');
-        copyBtn.textContent = 'Copiado!';
-        setTimeout(() => (copyBtn.textContent = 'Copiar texto'), 2000);
-    });
+  const textArea = document.createElement('textarea');
+  textArea.value = output;
+  textArea.style.width = '100%';
+  textArea.style.height = '220px';
+  textArea.readOnly = true;
+  textArea.style.resize = 'none';
 
-    container.appendChild(textArea);
-    container.appendChild(copyBtn);
-    document.body.appendChild(container);
+  const btnCopy = document.createElement('button');
+  btnCopy.textContent = 'Copiar texto';
+  btnCopy.style.marginTop = '8px';
+  btnCopy.style.width = '100%';
+  btnCopy.style.cursor = 'pointer';
+
+  btnCopy.onclick = () => {
+    textArea.select();
+    document.execCommand('copy');
+    btnCopy.textContent = 'Copiado!';
+    setTimeout(() => btnCopy.textContent = 'Copiar texto', 1500);
+  };
+
+  container.appendChild(textArea);
+  container.appendChild(btnCopy);
+  document.body.appendChild(container);
 
 })();
