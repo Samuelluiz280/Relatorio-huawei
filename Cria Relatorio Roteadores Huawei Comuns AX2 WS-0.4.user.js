@@ -1,128 +1,196 @@
 // ==UserScript==
-// @name         Huawei AX2 Info Collector
+// @name         Cria Relatorio Roteadores Huawei Comuns AX2 WS
 // @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Coleta informações específicas do Huawei WiFi AX2
-// @author       Você
-// @match        http://*/html/index.html
-// @grant        none
+// @version      0.6
+// @description  try to take over the world!
+// @author       Samuka 
+// @match        https://*/html/index.html
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=gegnet.com.br
+// @license      MIT
+// @grant        GM_setClipboard
 // ==/UserScript==
 
-(async function() {
-  'use strict';
+//12345667890
 
-  const ip = window.location.hostname;
-  const baseURL = `http://${ip}/api/`;
-  const headers = {
-    'Accept': 'application/json',
-    'X-Requested-With': 'XMLHttpRequest'
-  };
+//ntwk/lan_server
+// caso necessário será no parâmetro dnsmode false/true
 
-  async function fetchJson(endpoint) {
-    try {
-      const res = await fetch(baseURL + endpoint, { headers });
-      if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
-      return await res.json();
-    } catch(e) {
-      console.warn(`Erro fetch ${endpoint}:`, e.message);
-      return null;
+
+// Função para obter o cookie
+function getCookie(name) {
+    var value = "; " + document.cookie;
+    var parts = value.split("; " + name + "=");
+    if (parts.length == 2) return parts.pop().split(";").shift();
+}
+
+// Obtém o IP do domínio que o usuário está acessando
+var ip = window.location.hostname;
+
+// URL base
+var url = "https://" + ip + "/";
+
+// Caminho para API
+var url_api = "https://" + ip + "/api/";
+
+// Criação de headers
+var headers = {
+    "Accept": "application/json, text/javascript, /; q=0.01",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Connection": "keep-alive",
+    "Host": ip,
+    "Referer": url + "html/index.html",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 OPR/107.0.0.0",
+    "X-Requested-With": "XMLHttpRequest",
+    "_ResponseFormat": "JSON",
+    "sec-ch-ua": "\"Not A(Brand\";v=\"99\", \"Opera GX\";v=\"107\", \"Chromium\";v=\"121\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\""
+};
+
+function getUptime(){
+    let path = 'system/deviceinfo';
+    let url = url_api + path;
+
+    return fetch(url, { headers: headers }).then(response => response.json().then(data => {
+        if (data.UpTime >= 86400) {
+            const dias = Math.floor(data.UpTime / 86400);
+            return dias === 1 ? "1 dia" : dias + " dias";
+        } else if (data.UpTime >= 3600) {
+            const horas = Math.floor(data.UpTime / 3600);
+            return horas === 1 ? "1 hora" : horas + " horas";
+        } else if (data.UpTime >= 60) {
+            const minutos = Math.floor(data.UpTime / 60);
+            return minutos === 1 ? "1 minuto" : minutos + " minutos";
+        } else {
+            return data.UpTime === 1 ? "1 segundo" : data.UpTime + " segundos";
+        }
+    }));
+}
+
+// Função para obter informações da WAN
+function getWAN() {
+    var path = 'ntwk/wan?type=active';
+    var url = url_api + path;
+    return fetch(url, { headers: headers }).then(response => response.json().then(data => {
+        if (data.DNSOverrideAllowed === true){
+            return data.IPv4DnsServers.split(",");
+        }else{
+            return false;
+        }
+    }));
+}
+
+// Função para obter o status do UPnP
+function getUPnPStatus() {
+    var url = url_api + "ntwk/lan_upnp";
+    return fetch(url, { headers: headers }).then(response => response.json()).then(data => data.enable);
+}
+
+// Função para obter informações das redes 2.4GHz
+function getRedesInfo24GHz() {
+    var url = url_api + "system/diagnose_wlan_basic?type=1";
+    return fetch(url, { headers: headers }).then(response => response.json()).then(data => ({ canal: data.MaxBitRate === "Auto" ? "em auto" : "no canal " + data.Channel, largura_banda: data.Bandwidth + " MHz" }));
+}
+
+// Função para obter informações das redes 5GHz
+function getRedesInfo5GHz() {
+    var url = url_api + "system/diagnose_wlan_basic?type=2";
+    return fetch(url, { headers: headers }).then(response => response.json()).then(data => ({ canal: data.MaxBitRate === "Auto" ? "em auto" : "no canal " + data.Channel, largura_banda: data.Bandwidth + " MHz" }));
+}
+
+// Função para obter informações do dispositivo
+function getDeviceInfo() {
+    var url = url_api + "system/deviceinfo";
+    return fetch(url, { headers: headers }).then(response => response.json()).then(data => [data.FriendlyName, data.SoftwareVersion]);
+}
+
+// Função para obter o número de dispositivos conectados no momento
+function ConectadosNoMomento() {
+    var url = url_api + "system/HostInfo";
+    return fetch(url, { headers: headers }).then(response => response.json()).then(data => data.filter(device => device.Active === true).length);
+}
+
+// Função para obter o status do IPv6
+function getIPV6status() {
+    var url = url_api + "ntwk/ipv6_enable";
+    return fetch(url, { headers: headers }).then(response => response.json()).then(data => {
+        if (data.Enable === 1) {
+            var url_ipv6_type = url_api + "ntwk/ipv6_wan";
+            return fetch(url_ipv6_type, { headers: headers }).then(response_ipv6_type => response_ipv6_type.json()).then(data_ipv6_type => data_ipv6_type.X_IPv6AddressingType);
+        } else {
+            return false;
+        }
+    });
+}
+
+// Função para obter o status de priorização do 5G
+function getPriorizar5G() {
+    var url = url_api + "ntwk/WlanGuideBasic?type=notshowpassall";
+    return fetch(url, { headers: headers }).then(response => response.json()).then(data => data.DbhoEnable);
+}
+
+
+function constructScript(){
+    // Monta a string com as informações
+    Promise.all([getDeviceInfo(), ConectadosNoMomento(), getWAN(), getUPnPStatus(), getRedesInfo24GHz(), getRedesInfo5GHz(), getIPV6status(), getPriorizar5G(), getUptime()]).then(values => {
+        var deviceInfo = values[0];
+        var connectedDevices = values[1];
+        var upnpStatus = values[3];
+        var redes24GHz = values[4];
+        var redes5GHz = values[5];
+        var ipv6Status = values[6];
+        var priorizar5G = values[7];
+        var getUptime = values[8];
+        var dnsWAN;
+        var dns_padrao_gg = ["187.85.152.10", "187.85.152.11"];
+
+        // Verifica se values[2] não é falso e se é igual ao dns_padrao_gg
+        if (values[2] !== false && JSON.stringify(values[2]) === JSON.stringify(dns_padrao_gg)){
+            dnsWAN = "Habilitado no padrão";
+        } else if (values[2] !== false && JSON.stringify(values[2]) !== JSON.stringify(dns_padrao_gg)){
+            dnsWAN = "Habilitado";
+        } else {
+            dnsWAN = "Desabilitado";
+        }
+
+        var script = `
+Configurações do roteador:
+Cliente possui um ${deviceInfo[0]} ${deviceInfo[1]}
+Equipamentos conectados no momento: ${connectedDevices}
+DNS WAN ${dnsWAN}
+DNS LAN ${dnsWAN}
+Priorizar 5G ${priorizar5G ? 'Habilitado' : 'Desabilitado'}
+IPv6 ${ipv6Status ? 'Habilitado em ' + ipv6Status : 'Desabilitado'}
+UPnP ${upnpStatus ? 'Habilitado' : 'Desabilitado'}
+Rede 2.4 com canal ${redes24GHz.canal} e largura em ${redes24GHz.largura_banda}
+Rede 5G com canal ${redes5GHz.canal} e largura em ${redes5GHz.largura_banda}
+Uptime: ${getUptime}`;
+        console.log("[!] Copiado para área de Transferência");
+
+        GM_setClipboard(script);
+        console.log(script);
+    });
+}
+
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function executeRepeatedly() {
+  let c = 0;
+  while (true) {
+    let path = document.location.href
+    if (path.indexOf("home") !== -1 && c === 0){
+        constructScript();
+        c = 1;
     }
+    await delay(500);
   }
+}
 
-  // Coletar dados de cada endpoint
-  const deviceInfo = await fetchJson('system/deviceinfo');
-  const wanDsl = await fetchJson('ntwk/wan_dsl');
-  const lanDhcp = await fetchJson('ntwk/lan_dhcp');
-  const lanUpnp = await fetchJson('ntwk/lan_upnp');
-  const ipv6 = await fetchJson('ntwk/ipv6');
-  const wifiBasic = await fetchJson('ntwk/wifi_basic');
-  const wifiAdvanced = await fetchJson('ntwk/wifi_advanced');
-
-  // Extrair dados com fallback para 'Desconhecido'
-  const modelo = deviceInfo?.FriendlyName || deviceInfo?.ModelName || 'Desconhecido';
-  const firmware = deviceInfo?.SoftwareVersion || 'Desconhecido';
-
-  const dnsWAN = wanDsl ? `${wanDsl.dns1 || '-'} / ${wanDsl.dns2 || '-'}` : 'Desconhecido';
-  const dnsLAN = lanDhcp ? `${lanDhcp.dns1 || '-'} / ${lanDhcp.dns2 || '-'}` : 'Desconhecido';
-
-  const priorizar5G = (wifiAdvanced?.EnableSmartConnect === true) ? 'Habilitado' : 'Desabilitado';
-
-  const upnpStatus = lanUpnp?.enable === true ? 'Habilitado' : 'Desabilitado';
-
-  const ipv6Status = ipv6?.EnableIPv6 ? 'Habilitado' : 'Desabilitado';
-
-  // Rede 2.4G - largura e canal
-  const wifi24 = wifiBasic?.WifiBasic?.find(w => w.Name?.includes('2.4G')) || wifiBasic?.WifiBasic || {};
-  const largura24 = wifi24?.Bandwidth || 'Desconhecido';
-  const canal24 = wifi24?.Channel || 'Desconhecido';
-
-  // Rede 5G - largura e canal
-  const wifi5 = wifiBasic?.WifiBasic?.find(w => w.Name?.includes('5G')) || wifiBasic?.WifiBasic || {};
-  const largura5 = wifi5?.Bandwidth || 'Desconhecido';
-  const canal5 = wifi5?.Channel || 'Desconhecido';
-
-  // Uptime - do deviceInfo (em segundos) para string legível
-  const uptimeSeg = parseInt(deviceInfo?.UpTime || 0);
-  let uptimeStr = 'Desconhecido';
-  if (uptimeSeg > 0) {
-    const dias = Math.floor(uptimeSeg / 86400);
-    const horas = Math.floor((uptimeSeg % 86400) / 3600);
-    const minutos = Math.floor((uptimeSeg % 3600) / 60);
-    uptimeStr = `${dias} dia${dias !== 1 ? 's' : ''} ${horas} hora${horas !== 1 ? 's' : ''} ${minutos} minuto${minutos !== 1 ? 's' : ''}`;
-  }
-
-  // Montar output formatado
-  const output = `
-[Configurações do Roteador]
-Modelo: ${modelo}
-Firmware: ${firmware}
-DNS WAN: ${dnsWAN}
-DNS LAN: ${dnsLAN}
-Priorizar 5G: ${priorizar5G}
-UPNP: ${upnpStatus}
-IPv6 Habilitado: ${ipv6Status}
-Rede 2.4G - Largura: ${largura24} | Canal: ${canal24}
-Rede 5G - Largura: ${largura5} | Canal: ${canal5}
-Uptime: ${uptimeStr}
-  `.trim();
-
-  // Criar textarea copiável e botão copiar
-  const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.top = '20px';
-  container.style.right = '20px';
-  container.style.width = '360px';
-  container.style.padding = '10px';
-  container.style.background = '#f9f9f9';
-  container.style.border = '2px solid #444';
-  container.style.borderRadius = '8px';
-  container.style.zIndex = 9999;
-  container.style.fontFamily = 'monospace';
-  container.style.fontSize = '13px';
-  container.style.boxShadow = '0 0 10px rgba(0,0,0,0.2)';
-
-  const textArea = document.createElement('textarea');
-  textArea.value = output;
-  textArea.style.width = '100%';
-  textArea.style.height = '220px';
-  textArea.readOnly = true;
-  textArea.style.resize = 'none';
-
-  const btnCopy = document.createElement('button');
-  btnCopy.textContent = 'Copiar texto';
-  btnCopy.style.marginTop = '8px';
-  btnCopy.style.width = '100%';
-  btnCopy.style.cursor = 'pointer';
-
-  btnCopy.onclick = () => {
-    textArea.select();
-    document.execCommand('copy');
-    btnCopy.textContent = 'Copiado!';
-    setTimeout(() => btnCopy.textContent = 'Copiar texto', 1500);
-  };
-
-  container.appendChild(textArea);
-  container.appendChild(btnCopy);
-  document.body.appendChild(container);
-
-})();
+executeRepeatedly();
