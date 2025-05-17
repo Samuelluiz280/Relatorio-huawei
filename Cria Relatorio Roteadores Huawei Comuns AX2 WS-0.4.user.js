@@ -4,7 +4,7 @@
 // @version      1.1
 // @description  Coleta informações úteis de roteadores Huawei (modelo, uptime, dispositivos conectados, etc.)
 // @author       Samuka
-// @match        https://187.85.156.88/html/index.html#/home
+// @match         *://*/html/index.html
 // @grant        none
 // ==/UserScript==
 
