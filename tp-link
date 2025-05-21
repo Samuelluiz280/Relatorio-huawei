@@ -1,11 +1,13 @@
 // ==UserScript==
-// @name         Teste Simples
+// @name         Cria Relatorio Roteadores Huawei Comuns AX2 WS
 // @namespace    http://tampermonkey.net/
-// @version      0.1
-// @description  Apenas alerta para testar instalação
-// @match        *://*/*
-// @grant        none
-// ==/UserScript==
+// @version      0.6
+// @description  try to take over the world!
+// @author       Samuka 
+// @match        https://*/html/index.html
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=gegnet.com.br
+// @license      MIT
+// @grant        GM_setClipboard
 
 (function() {
     'use strict';
