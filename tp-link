@@ -1,15 +1,10 @@
 // ==UserScript==
-// @name         Extract Archer C5 Router Info Auto Copy
+// @name         Teste Simples
 // @namespace    http://tampermonkey.net/
-// @version      1.1
-// @description  Extrai dados do Archer C5 e copia automaticamente para a área de transferência
-// @author       Você
-// @match        http://192.168.0.1/*
-// @match        http://192.168.1.1/*
-// @match        http://tplinkwifi.net/*
-// @match        http://tplinklogin.net/*
-// @grant        GM_setClipboard
-// @run-at       document-end
+// @version      0.1
+// @description  Apenas alerta para testar instalação
+// @match        *://*/*
+// @grant        none
 // ==/UserScript==
 
 (function() {
