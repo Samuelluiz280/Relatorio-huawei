@@ -1,0 +1,61 @@
+// ==UserScript==
+// @name         Extract Archer C5 Router Info Auto Copy
+// @namespace    http://tampermonkey.net/
+// @version      1.1
+// @description  Extrai dados do Archer C5 e copia automaticamente para a área de transferência
+// @author       Você
+// @match        http://192.168.0.1/*
+// @match        http://192.168.1.1/*
+// @match        http://tplinkwifi.net/*
+// @match        http://tplinklogin.net/*
+// @grant        GM_setClipboard
+// @run-at       document-end
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    const elementsToExtract = [
+        { selector: '#channelWidth_2g', type: 'value' },
+        { selector: '#DNS1V4', type: 'value' },
+        { selector: '#DNS2V4', type: 'value' },
+        { selector: '#IPLanV4', type: 'value' },
+        { selector: '#UpTime', type: 'text' }
+    ];
+
+    let results = {};
+
+    function extractElement({ selector, type }) {
+        const el = document.querySelector(selector);
+        if (!el) {
+            console.log(`Elemento não encontrado: ${selector}`);
+            results[selector] = 'Não encontrado';
+            return;
+        }
+
+        if(type === 'value') {
+            results[selector] = el.value || 'Sem valor';
+        } else if(type === 'text') {
+            results[selector] = el.textContent.trim() || 'Sem texto';
+        }
+    }
+
+    function extractAll() {
+        elementsToExtract.forEach(extractElement);
+
+        let output = 'Dados do Archer C5:\n';
+        output += `Canal e largura 2.4G: ${results['#channelWidth_2g']}\n`;
+        output += `DNS1 IPv4: ${results['#DNS1V4']}\n`;
+        output += `DNS2 IPv4: ${results['#DNS2V4']}\n`;
+        output += `IP LAN IPv4: ${results['#IPLanV4']}\n`;
+        output += `Uptime: ${results['#UpTime']}\n`;
+  
+        console.log(output);
+        GM_setClipboard(output);
+        alert('Dados extraídos e copiados para a área de transferência!');
+    }
+
+    window.addEventListener('load', () => {
+        setTimeout(extractAll, 1000);
+    });
+})();
