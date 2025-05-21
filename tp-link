@@ -8,6 +8,7 @@
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=gegnet.com.br
 // @license      MIT
 // @grant        GM_setClipboard
+// ==/UserScript==
 
 (function() {
     'use strict';
